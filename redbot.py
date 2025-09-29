@@ -1057,9 +1057,9 @@ Digite `/help` para ver comandos disponíveis!"""
 • SpiderFoot - Automação de OSINT
 • Shodan - Scanner de dispositivos IoT
 
-**Google Dorks Cheatsheet:**
+**Google Dorks Collection by Jolanda de Koff:**
 
-### **Search Filters**
+### **Search Filters & Operators**
 | Filter | Description | Example |
 |--------|-------------|---------|
 | `allintext` | Searches for occurrences of all the keywords given | `allintext:"keyword"` |
@@ -1078,31 +1078,188 @@ Digite `/help` para ver comandos disponíveis!"""
 | `cache` | Shows the version of the web page that Google has in its cache | `cache:www.google.com` |
 
 ### **Operators**
-- **Search Term**: `"Tinned Sandwiches"` - Exact phrase search
 - **OR**: `site:facebook.com | site:twitter.com` - Search for either term
 - **AND**: `site:facebook.com & site:twitter.com` - Both terms required
-- **Include results**: `-site:facebook.com +site:facebook.*` - Include specific results
-- **Exclude results**: `site:facebook.* -site:facebook.com` - Exclude specific results
+- **Include**: `-site:facebook.com +site:facebook.*` - Include specific results
+- **Exclude**: `site:facebook.* -site:facebook.com` - Exclude specific results
 - **Synonyms**: `~set` - Include synonyms of the word
 - **Glob pattern**: `site:*.com` - Wildcard matching
 
-### **Powerful Examples**
+### **Powerful Google Dorks Collection:**
+
+#### **Database & Config Files**
 ```
-# Arquivos expostos
-intext:"index of /"
-Nina Simone intitle:"index.of" "parent directory" "size" "last modified" "description" I Put A Spell On You (mp4|mp3|avi|flac|aac|ape|ogg) -inurl:(jsp|php|html|aspx|htm|cf|shtml|lyrics-realm|mp3-collection) -site:.info
-
-# Documentos confidenciais
-ext:(doc | pdf | xls | txt | ps | rtf | odt | sxw | psw | ppt | pps | xml) (intext:confidential salary | intext:"budget approved") inurl:confidential
-
-# Configurações expostas
-filetype:config inurl:web.config inurl:ftp
-"Windows XP Professional" 94FBR
-
-# Diretórios abertos
-parent directory DVDRip -xxx -html -htm -php -shtml -opendivx -md5 -md5sums
-parent directory MP3 -xxx -html -htm -php -shtml -opendivx -md5 -md5sums
+"MySQL_ROOT_PASSWORD:" "docker-compose" ext:yml
+!Host=*.* intext:enc_UserPassword=* ext:pcf
+"-----BEGIN RSA PRIVATE KEY-----" ext:key
+"-----BEGIN X509 CERTIFICATE-----" ext:pem -git
+"# -FrontPage-" ext:pwd inurl:(service | authors | administrators | users)
+"# mysql dump" filetype:sql
+"# mysql dump" filetype:sql 21232f297a57a5a743894a0e4a801fc3
+"phpMyAdmin MySQL-Dump" "INSERT INTO" -"the"
+"phpMyAdmin MySQL-Dump" filetype:txt
 ```
+
+#### **Exposed Directories & Files**
+```
+"Index of /" +.htaccess
+"Index of /" +passwd
+"Index of /" +password.txt
+"Index of /admin"
+"Index of /backup"
+"Index of /mail"
+"Index of /password"
+"Index of /wp-content/uploads/backupbuddy_backups" zip
+"Index of" "database.sql"
+"Index of" "logins.json" "key3.db"
+"Index of" / "chat/logs"
+"Index of" inurl:"/$Recycle.Bin/"
+"Index of" inurl:config inurl:production
+"Index of" inurl:htdocs inurl:xampp
+"Index of" inurl:phpmyadmin
+"Index of" inurl:webalizer
+```
+
+#### **Login Pages & Admin Panels**
+```
+"Login - Sun Cobalt RaQ"
+"Login Name" Repository Webtop intitle:login
+"Login to Usermin" inurl:20000
+"Joomla! Administration Login" inurl:"/index.php"
+"PaperCut Login"
+"IMail Server Web Messaging" intitle:login
+"HostingAccelerator" intitle:"login" +"Username" -"news" -demo
+```
+
+#### **Vulnerable Applications**
+```
+"Powered by Coppermine Photo Gallery"
+"Powered by WordPress" -html filetype:php -demo -wordpress.org -bugtraq
+"Powered by phpBB" inurl:"index.php?s" OR inurl:"index.php?style"
+"Powered by CuteNews"
+"Powered by SMF"
+"Powered by PunBB"
+"Powered by vBulletin Version 5.5.4"
+"Powered by Drupal" -demo -bugtraq
+```
+
+#### **Sensitive Information**
+```
+"SECRET//NOFORN" ext:pdf
+"SERVER_ADDR" "SERVER_PORT" "SERVER_NAME" ext:log
+"HTTP_FROM=googlebot" googlebot.com "Server_Software="
+"END_FILE" inurl:"/password.log"
+"OTL logfile" "by OldTimer" ext:txt
+"Logfile of Trend Micro HijackThis" ext:log
+```
+
+#### **Network & Infrastructure**
+```
+"Cisco PIX Security Appliance Software Version" + "Serial Number" + "show ver" -inurl
+"IBM Security AppScan Report" ext:pdf
+"Host Vulnerability Summary Report"
+"Network Vulnerability Assessment Report"
+"APC Console Port Management Server" intitle:"Console Port Management Server"
+```
+
+#### **File Upload & Download**
+```
+"Instant Free File Uploader"
+"File Upload Manager v1.3" "rename to"
+"Powered by Absolute File Send"
+"Powered by PHP Advanced Transfer Manager v1.30"
+```
+
+#### **Error Messages & Debug Info**
+```
+"ORA-00921: unexpected end of SQL command"
+"ORA-00933: SQL command not properly ended"
+"ORA-00936: missing expression"
+"PHP Fatal error: require()" ext:log
+"Parse error: parse error, unexpected T_VARIABLE" "on line" filetype:php
+```
+
+#### **Web Servers & Applications**
+```
+"Microsoft-IIS/* server at" intitle:index.of
+"Microsoft-IIS/4.0" intitle:index.of
+"Microsoft-IIS/5.0 server at"
+"Microsoft-IIS/6.0" intitle:index.of
+"Apache Subversion" intitle:"index of"
+"OpenSSL" AND "1.0.1 Server at"
+```
+
+#### **CMS & Blog Systems**
+```
+"Powered by Joomla!" -demo
+"Powered by Drupal" -demo
+"Powered by Magento"
+"Powered by PrestaShop"
+"Powered by OpenCart"
+"Powered by WooCommerce"
+```
+
+#### **Mail Servers & Communication**
+```
+"Powered by IceWarp Software" inurl:mail
+"Powered by SquirrelMail"
+"Powered by Roundcube"
+"Merak Mail Server Software" -.gov -.mil -.edu
+```
+
+#### **Development & Debug**
+```
+"PHP Version" inurl:/php/phpinfo.php
+"phpinfo()" filetype:php
+"DEBUG" ext:log
+"error_log" ext:log
+"access_log" ext:log
+```
+
+#### **Cloud & Infrastructure**
+```
+"CF-Host-Origin-IP" "CF-Int-Brand-ID" "CF-RAY" "CF-Visitor" "github" -site:github.com
+"Amazon S3" "Access Denied" -amazon.com
+"Microsoft Azure" "Server Error" -microsoft.com
+```
+
+#### **IoT & Embedded Devices**
+```
+"ADS-B Receiver Live Dump1090 Map"
+"Phaser 6250" "Printer Neighborhood" "XEROX CORPORATION"
+"RICOH Network Printer D model-Restore Factory"
+"Remote Supervisor Adapter II" inurl:userlogin_logo.ssi
+```
+
+### **Advanced Search Techniques**
+```
+# Find exposed Git repositories
+".git" intitle:"Index of"
+
+# Find backup files
+"backup.sql" ext:sql -git
+"backup.zip" -git
+
+# Find configuration files
+"config.php" ext:php -git
+"web.config" ext:config -git
+
+# Find database dumps
+"Dumping data for table" ext:sql
+"-- MySQL dump" ext:sql -git
+
+# Find log files
+"error_log" ext:log
+"access_log" ext:log
+"debug.log" ext:log
+
+# Find password files
+"passwd" ext:txt -git
+"shadow" ext:txt -git
+"passwords.txt" -git
+```
+
+⚠️ **Disclaimer**: Use only for authorized security testing and research. Always obtain explicit permission before performing security assessments.
 
 Use `/osint <consulta>` para buscar informações!"""
 
