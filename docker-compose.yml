@@ -1,0 +1,46 @@
+version: '3.8'
+
+#
+# Stack do Portainer para a aplicação RED-BOT
+#
+
+services:
+  redbot:
+    # Constrói a imagem a partir do Dockerfile local
+    build: .
+    container_name: redbot-app
+    
+    # Mapeia a porta da aplicação para a porta do host
+    ports:
+      - "7860:7860"
+      
+    # Política de reinício para garantir que o container volte a funcionar
+    restart: unless-stopped
+    
+    # Variáveis de ambiente
+    # IMPORTANTE: Substitua 'SUA_CHAVE_API' pela sua chave do OpenRouter
+    environment:
+      - OPENROUTER_API_KEY=SUA_CHAVE_API
+      
+    # Limites de recursos para evitar consumo excessivo
+    # Ajuste conforme a necessidade e capacidade do host
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0' # Limita a 1 núcleo de CPU
+          memory: '1G' # Limita a 1GB de RAM
+        reservations:
+          cpus: '0.25'
+          memory: '256M'
+
+    # Labels para organização e metadados no Portainer
+    labels:
+      - "com.portainer.stack.name=red-bot-stack"
+      - "com.portainer.stack.description=Assistente de Red Team e Ethical Hacking"
+      - "io.portainer.access.control.public=true" # Opcional: torna o stack visível a todos os usuários do Portainer
+      - "diun.enable=true" # Opcional: para monitoramento de atualização de imagem com Diun
+
+# Define uma rede isolada para a aplicação
+networks:
+  default:
+    name: redbot-net
