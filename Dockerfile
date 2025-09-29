@@ -6,7 +6,8 @@ FROM python:3.10-slim as builder
 WORKDIR /app
 
 # Instala dependências do sistema (build-essential para compilações, curl para healthcheck)
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copia o arquivo de dependências e instala em um diretório separado para cache
 COPY requirements.txt .

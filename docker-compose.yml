@@ -21,22 +21,30 @@ services:
     # IMPORTANTE: Substitua 'SUA_CHAVE_API' pela sua chave do OpenRouter
     environment:
       - OPENROUTER_API_KEY=SUA_CHAVE_API
+      # Configurações de performance
+      - PYTHONUNBUFFERED=1
+      - PYTHONOPTIMIZE=1
+      # Configurações de cache e conexões
+      - CACHE_MAXSIZE=100
+      - HTTP_CONNECTION_POOL_SIZE=10
+      - HTTP_TIMEOUT=30
       
-    # Limites de recursos para evitar consumo excessivo
-    # Ajuste conforme a necessidade e capacidade do host
+    # Limites de recursos otimizados para performance
+    # Configurado para suportar operações assíncronas e cache
     deploy:
       resources:
         limits:
-          cpus: '1.0' # Limita a 1 núcleo de CPU
-          memory: '1G' # Limita a 1GB de RAM
+          cpus: '2.0' # Aumentado para suportar operações assíncronas
+          memory: '2G' # Aumentado para cache e operações paralelas
         reservations:
-          cpus: '0.25'
-          memory: '256M'
+          cpus: '0.5'
+          memory: '512M'
 
     # Labels para organização e metadados no Portainer
     labels:
       - "com.portainer.stack.name=red-bot-stack"
-      - "com.portainer.stack.description=Assistente de Red Team e Ethical Hacking"
+      - "com.portainer.stack.description=Assistente de Red Team e Ethical Hacking com Otimizações de Performance"
+      - "com.portainer.stack.version=2.0-performance-optimized"
       - "io.portainer.access.control.public=true" # Opcional: torna o stack visível a todos os usuários do Portainer
       - "diun.enable=true" # Opcional: para monitoramento de atualização de imagem com Diun
 
