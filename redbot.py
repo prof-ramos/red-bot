@@ -804,7 +804,7 @@ def manage_users():
         if self.openrouter_client:
             try:
                 response = self.openrouter_client.chat.completions.create(
-                    model="anthropic/claude-3-haiku",  # Modelo rápido e econômico
+                    model="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
                     messages=[
                         {"role": "system", "content": self.system_prompt},
                         {"role": "user", "content": message}
@@ -828,7 +828,7 @@ def manage_users():
         message_lower = message.lower()
 
         if any(word in message_lower for word in ['python', 'código', 'script', 'programar']):
-            response = """🐍 **Desenvolvimento Python para Red Team:**
+            response = """🐍 **Desenvolvimento Python para Red Team:"""
 
 Posso ajudar você com:
 • Scripts de automação para testes de segurança
