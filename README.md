@@ -27,6 +27,13 @@
 - **setup.sh**: Script para configurar o ambiente do projeto e instalar as dependências necessárias
 - **requirements.txt**: Arquivo com as dependências necessárias para execução do projeto
 - **README.md**: Documentação do projeto
+- **AGENTS.md**: Documentação sobre agentes e ferramentas de desenvolvimento
+- **CLAUDE.md**: Configurações específicas para integração com Claude
+- **DEPLOY.md**: Instruções para deployment do projeto
+- **docker-compose.yml**: Configuração Docker Compose para containerização
+- **Dockerfile**: Arquivo Docker para criação da imagem do projeto
+- **QWEN.md**: Configurações para integração com Qwen
+- **repomix-output.md**: Saída do repomix para análise do repositório
 
 ## 🚀 Instruções para Execução
 
@@ -171,6 +178,33 @@ Caso você queira personalizar o **RED-BOT** ou adaptá-lo a novas necessidades,
 4. Estender as funcionalidades criando novos métodos na classe `RedBot`
 
 Esse arquivo é onde você pode definir as diretrizes e comandos que o bot deve seguir.
+
+## 🛠️ Desenvolvimento
+
+### Linting e Qualidade de Código
+
+Para manter a qualidade do código, utilize as seguintes ferramentas:
+
+```bash
+# Instalar ferramentas de linting
+pip install flake8 black isort mypy
+
+# Verificar linting
+flake8 redbot.py
+
+# Formatar código
+black redbot.py
+
+# Organizar imports
+isort redbot.py
+
+# Verificar tipos
+mypy redbot.py
+```
+
+### Testes
+
+O projeto atualmente não possui testes automatizados. Testes manuais são recomendados através da interface Gradio em `http://localhost:7860`.
 
 ## 🤝 Contribuições
 

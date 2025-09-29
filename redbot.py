@@ -12,28 +12,39 @@ import itertools
 import string
 import time
 import os
+import logging
+import json
+from datetime import datetime
 from typing import List, Dict, Tuple
 import openai
 
 class RedBot:
     def __init__(self):
+        self.setup_logging()
         self.system_prompt = self.load_system_prompt()
         self.conversation_history = []
         self.openrouter_client = self.init_openrouter_client()
+        self.feedback_file = "logs/feedback.json"
+        self.last_message = ""
+        self.last_response = ""
+        self.ensure_logs_directory()
         
     def load_system_prompt(self) -> str:
         """Carrega o prompt do sistema do arquivo prompt.md"""
         try:
             with open('prompt.md', 'r', encoding='utf-8') as f:
-                return f.read()
+                content = f.read()
+                self.logger.info("Prompt do sistema carregado com sucesso")
+                return content
         except FileNotFoundError:
+            self.error_logger.error("Arquivo prompt.md não encontrado")
             return "Assistente especializado em Ethical Hacking e Red Team"
 
     def init_openrouter_client(self):
         """Inicializa cliente OpenRouter"""
         api_key = os.getenv('OPENROUTER_API_KEY')
         if not api_key:
-            print("⚠️ OPENROUTER_API_KEY não configurada. Usando modo rule-based.")
+            self.logger.warning("OPENROUTER_API_KEY não configurada. Usando modo rule-based.")
             return None
 
         try:
@@ -41,10 +52,85 @@ class RedBot:
                 base_url="https://openrouter.ai/api/v1",
                 api_key=api_key,
             )
+            self.logger.info("Cliente OpenRouter inicializado com sucesso")
             return client
         except Exception as e:
-            print(f"❌ Erro ao inicializar OpenRouter: {e}")
+            self.error_logger.error(f"Erro ao inicializar OpenRouter: {e}")
             return None
+
+    def setup_logging(self):
+        """Configura sistema de logging"""
+        # Criar diretório de logs
+        os.makedirs('logs', exist_ok=True)
+
+        # Configurar logger principal
+        self.logger = logging.getLogger('redbot')
+        self.logger.setLevel(logging.INFO)
+
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+
+        # Handler para arquivo
+        file_handler = logging.FileHandler('logs/redbot.log')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+
+        # Handler para console
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.WARNING)
+        console_handler.setFormatter(formatter)
+
+        # Adicionar handlers
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+
+        # Loggers específicos
+        self.chat_logger = logging.getLogger('redbot.chat')
+        self.security_logger = logging.getLogger('redbot.security')
+        self.error_logger = logging.getLogger('redbot.error')
+
+        # Configurar handlers para loggers específicos
+        for logger in [self.chat_logger, self.security_logger, self.error_logger]:
+            logger.setLevel(logging.INFO)
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+            logger.propagate = False
+
+        self.logger.info("Sistema de logging inicializado")
+
+    def save_feedback(self, feedback_type: str, message: str = "", response: str = ""):
+        """Salva feedback do usuário"""
+        feedback_data = {
+            "timestamp": datetime.now().isoformat(),
+            "type": feedback_type,
+            "message": message[:200],  # Limitar tamanho
+            "response": response[:200]
+        }
+
+        try:
+            # Carregar feedbacks existentes
+            if os.path.exists(self.feedback_file):
+                with open(self.feedback_file, 'r', encoding='utf-8') as f:
+                    feedbacks = json.load(f)
+            else:
+                feedbacks = []
+
+            feedbacks.append(feedback_data)
+
+            # Salvar
+            with open(self.feedback_file, 'w', encoding='utf-8') as f:
+                json.dump(feedbacks, f, indent=2, ensure_ascii=False)
+
+            self.logger.info(f"Feedback salvo: {feedback_type}")
+
+        except Exception as e:
+            self.error_logger.error(f"Erro ao salvar feedback: {e}")
+
+    def ensure_logs_directory(self):
+        """Garante que o diretório de logs existe"""
+        os.makedirs('logs', exist_ok=True)
     
     def osint_google_dorking(self, query: str) -> List[str]:
         """Realiza Google Dorking para OSINT"""
@@ -670,6 +756,7 @@ def manage_users():
 
     def process_message(self, message: str, chat_history: List[List[str]]) -> Tuple[str, List[List[str]]]:
         """Processa mensagem do usuário e retorna resposta"""
+        self.chat_logger.info(f"Mensagem recebida: {message[:100]}...")  # Log first 100 chars
         
         if message.startswith('/osint'):
             query = message.replace('/osint', '').strip()
@@ -700,9 +787,11 @@ def manage_users():
             parts = message.split()
             if len(parts) >= 2:
                 target_hash = parts[1]
+                self.security_logger.warning(f"Quebra de hash solicitada: {target_hash}")
                 result = self.brute_force_hash(target_hash)
                 if result:
                     response = f"🔓 **Hash quebrado!** Resultado: `{result}`"
+                    self.security_logger.warning(f"Hash quebrado com sucesso: {target_hash} -> {result}")
                 else:
                     response = "🔒 Hash não foi quebrado com os parâmetros atuais"
             else:
@@ -795,8 +884,21 @@ def manage_users():
             response = self.generate_response(message)
         
         chat_history.append([message, response])
+        self.last_message = message
+        self.last_response = response
+        self.chat_logger.info(f"Resposta enviada: {response[:100]}...")
         return "", chat_history
-    
+
+    def give_positive_feedback(self):
+        """Registra feedback positivo"""
+        self.save_feedback("positive", self.last_message, self.last_response)
+        self.logger.info("Feedback positivo recebido")
+
+    def give_negative_feedback(self):
+        """Registra feedback negativo"""
+        self.save_feedback("negative", self.last_message, self.last_response)
+        self.logger.info("Feedback negativo recebido")
+
     def generate_response(self, message: str) -> str:
         """Gera resposta usando OpenRouter API ou fallback rule-based"""
 
@@ -1273,6 +1375,28 @@ def create_interface():
         background: #404040 !important;
     }
 
+    /* Feedback buttons */
+    .feedback-container {
+        justify-content: center !important;
+        gap: 10px !important;
+        margin: 10px 0 !important;
+    }
+
+    .feedback-btn {
+        background: linear-gradient(135deg, #212427 0%, #1D1F21 100%) !important;
+        color: #E0E0E0 !important;
+        border: 1px solid #404040 !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        font-size: 1.2em !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .feedback-btn:hover {
+        background: linear-gradient(135deg, #2A2A2A 0%, #252525 100%) !important;
+        box-shadow: 0 0 10px rgba(160, 160, 160, 0.3) !important;
+    }
+
     /* Markdown styling */
     .prose {
         color: #E0E0E0 !important;
@@ -1402,11 +1526,16 @@ def create_interface():
                     height=650,
                     show_label=False,
                     elem_classes=["chat-message"],
-                    bubble_full_width=False,
+                    type='messages',
                     avatar_images=(None, None),  # Remove default avatars since we're using custom styling
                     elem_id="chatbot-container"
                 )
-                
+
+                # Feedback buttons
+                with gr.Row(elem_classes=["feedback-container"]):
+                    like_btn = gr.Button("👍 Curtir", elem_classes=["feedback-btn"])
+                    dislike_btn = gr.Button("👎 Não curtir", elem_classes=["feedback-btn"])
+
                 with gr.Row(elem_classes=["message-input-container"]):
                     msg = gr.Textbox(
                         placeholder="Digite sua pergunta ou comando (ex: /help, /osint, /sqltest)...",
@@ -1522,6 +1651,10 @@ def create_interface():
         
         msg.submit(respond, [msg, chatbot], [msg, chatbot])
         send_btn.click(respond, [msg, chatbot], [msg, chatbot])
+
+        # Feedback buttons
+        like_btn.click(lambda: bot.give_positive_feedback(), inputs=[], outputs=[])
+        dislike_btn.click(lambda: bot.give_negative_feedback(), inputs=[], outputs=[])
     
     return interface
 
