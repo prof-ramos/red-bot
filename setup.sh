@@ -33,7 +33,11 @@ source .venv/bin/activate
 
 # Instala dependências
 echo "📦 Instalando dependências..."
-uv pip install gradio requests beautifulsoup4 openai
+uv pip install -r requirements.txt
+
+# Instala browsers do Playwright
+echo "🌐 Instalando browsers do Playwright..."
+playwright install chromium
 
 # Verifica se as dependências foram instaladas
 echo "🔍 Verificando instalação..."
@@ -44,6 +48,9 @@ import requests
 import bs4
 import hashlib
 import openai
+import maigret
+import sublist3r
+from playwright.sync_api import sync_playwright
 print('✅ Todas as dependências instaladas com sucesso!')
 " 2>/dev/null
 

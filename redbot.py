@@ -14,9 +14,11 @@ import time
 import os
 import logging
 import json
+import subprocess
 from datetime import datetime
 from typing import List, Dict, Tuple
 import openai
+from playwright.sync_api import sync_playwright
 
 class RedBot:
     def __init__(self):
@@ -133,7 +135,30 @@ class RedBot:
         os.makedirs('logs', exist_ok=True)
     
     def osint_google_dorking(self, query: str) -> List[str]:
-        """Realiza Google Dorking para OSINT"""
+        """Realiza OSINT usando maigret para usernames ou Google Dorking"""
+        # Verifica se parece um username (sem espaços, sem operadores especiais)
+        if ' ' not in query and not any(op in query for op in ['site:', 'filetype:', 'inurl:', 'intitle:']):
+            # Tenta usar maigret para username
+            try:
+                result = subprocess.run(
+                    ['maigret', query, '--json', '--no-progressbar'],
+                    capture_output=True, text=True, timeout=60
+                )
+                if result.returncode == 0:
+                    data = json.loads(result.stdout)
+                    results = []
+                    for site, info in data.items():
+                        if info.get('status') == 'found':
+                            url = info.get('url')
+                            if url:
+                                results.append(f"{site}: {url}")
+                    if results:
+                        self.logger.info(f"Maigret encontrou {len(results)} perfis para {query}")
+                        return results[:10]
+            except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError, subprocess.SubprocessError) as e:
+                self.logger.warning(f"Maigret não disponível ou falhou: {e}")
+
+        # Fallback para Google Dorking
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -141,16 +166,18 @@ class RedBot:
             url = f"https://www.google.com/search?q={query}"
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
-            
+
             results = []
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 if 'url?q=' in href and 'google.com' not in href:
                     clean_url = href.split('url?q=')[1].split('&')[0]
                     results.append(clean_url)
-            
+
+            self.logger.info(f"Google Dorking encontrou {len(results)} resultados para {query}")
             return results[:10]
         except Exception as e:
+            self.error_logger.error(f"Erro no OSINT: {e}")
             return [f"Erro na busca: {str(e)}"]
     
     def test_sql_injection(self, url: str, payloads: List[str]) -> Dict:
@@ -201,7 +228,22 @@ class RedBot:
         return ""
     
     def find_subdomains(self, domain: str, wordlist: List[str] = None) -> List[str]:
-        """Encontra subdomínios usando lista de palavras"""
+        """Encontra subdomínios usando sublist3r ou fallback"""
+        try:
+            # Tenta usar sublist3r
+            result = subprocess.run(
+                ['sublist3r', '-d', domain, '-o', '/tmp/subdomains.txt'],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                with open('/tmp/subdomains.txt', 'r') as f:
+                    subdomains = [line.strip() for line in f if line.strip()]
+                self.logger.info(f"Sublist3r encontrou {len(subdomains)} subdomínios para {domain}")
+                return subdomains
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
+            self.logger.warning(f"Sublist3r não disponível ou falhou: {e}")
+
+        # Fallback para método básico
         if wordlist is None:
             wordlist = ['www', 'mail', 'ftp', 'admin', 'api', 'dev', 'test', 'staging']
 
@@ -220,7 +262,85 @@ class RedBot:
                 except:
                     continue
 
+        self.logger.info(f"Fallback encontrou {len(subdomains)} subdomínios para {domain}")
         return subdomains
+
+    def inspect_with_browser(self, url: str) -> str:
+        """Inspeciona URL usando Playwright para análise avançada"""
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+
+                # Configura user agent
+                page.set_extra_http_headers({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+
+                page.goto(url, timeout=30000)
+
+                # Coleta informações
+                title = page.title()
+                url_final = page.url
+                page_source = page.content()
+
+                # Extrai links
+                links = page.eval_on_selector_all('a[href]', """
+                    elements => elements.map(el => ({
+                        text: el.textContent.trim(),
+                        href: el.href
+                    }))
+                """)
+
+                # Extrai meta tags
+                meta_tags = page.eval_on_selector_all('meta', """
+                    elements => elements.map(el => ({
+                        name: el.name || el.getAttribute('property'),
+                        content: el.content
+                    }))
+                """)
+
+                # Verifica se há formulários
+                forms = page.eval_on_selector_all('form', """
+                    elements => elements.map(el => ({
+                        action: el.action,
+                        method: el.method,
+                        inputs: Array.from(el.querySelectorAll('input')).map(input => ({
+                            name: input.name,
+                            type: input.type,
+                            placeholder: input.placeholder
+                        }))
+                    }))
+                """)
+
+                browser.close()
+
+                # Formata resultado
+                result = f"📄 **Título:** {title}\n"
+                result += f"🔗 **URL Final:** {url_final}\n\n"
+
+                result += f"🏷️ **Meta Tags ({len(meta_tags)}):**\n"
+                for meta in meta_tags[:5]:
+                    if meta['name'] and meta['content']:
+                        result += f"- {meta['name']}: {meta['content']}\n"
+
+                result += f"\n📝 **Formulários ({len(forms)}):**\n"
+                for form in forms[:3]:
+                    result += f"- Action: {form['action']}, Method: {form['method']}\n"
+                    if form['inputs']:
+                        result += f"  Inputs: {len(form['inputs'])}\n"
+
+                result += f"\n🔗 **Links ({len(links)} primeiros):**\n"
+                for link in links[:10]:
+                    if link['href'] and link['text']:
+                        result += f"- [{link['text'][:50]}]({link['href']})\n"
+
+                self.logger.info(f"Inspeção browser concluída para {url}")
+                return result
+
+        except Exception as e:
+            self.error_logger.error(f"Erro na inspeção browser: {e}")
+            return f"Erro na inspeção: {str(e)}"
 
     def analyze_xss_vulnerability(self) -> str:
         """Analisa vulnerabilidades XSS e fornece explicações e mitigações"""
@@ -815,29 +935,29 @@ def manage_users():
             response = """🤖 **RED-BOT - Comandos Disponíveis:**
 
 **Comandos OSINT:**
-• `/osint <consulta>` - Google Dorking
-• `/subdomain <dominio>` - Busca subdomínios
+- `/osint <consulta>` - Google Dorking
+- `/subdomain <dominio>` - Busca subdomínios
 
 **Comandos Web Security:**
-• `/sqltest <URL>` - Teste SQL Injection
+- `/sqltest <URL>` - Teste SQL Injection
 
 **Comandos Password Cracking:**
-• `/hashcrack <hash>` - Quebra hash MD5
+- `/hashcrack <hash>` - Quebra hash MD5
 
 **Análise de Bug Bounty:**
-• `/xss` - Análise de vulnerabilidades XSS
-• `/api_exposure` - Exposição de dados via API
-• `/idor` - Insecure Direct Object References
-• `/csrf` - Cross-Site Request Forgery
-• `/ssrf` - Server-Side Request Forgery
-• `/auth_reset` - Autenticação quebrada em reset
-• `/file_idor` - IDOR em uploads de arquivo
-• `/cors` - CORS mal configurado
-• `/error_leak` - Vazamento via mensagens de erro
-• `/admin_panel` - Painel admin vulnerável
+- `/xss` - Análise de vulnerabilidades XSS
+- `/api_exposure` - Exposição de dados via API
+- `/idor` - Insecure Direct Object References
+- `/csrf` - Cross-Site Request Forgery
+- `/ssrf` - Server-Side Request Forgery
+- `/auth_reset` - Autenticação quebrada em reset
+- `/file_idor` - IDOR em uploads de arquivo
+- `/cors` - CORS mal configurado
+- `/error_leak` - Vazamento via mensagens de erro
+- `/admin_panel` - Painel admin vulnerável
 
 **Comandos Gerais:**
-• `/help` - Mostra esta ajuda
+- `/help` - Mostra esta ajuda
 
 **Exemplo de uso:**
 ```
@@ -879,6 +999,16 @@ def manage_users():
 
         elif message.startswith('/admin_panel'):
             response = self.analyze_admin_panel()
+
+        elif message.startswith('/inspect'):
+            parts = message.split()
+            if len(parts) >= 2:
+                url = parts[1]
+                self.security_logger.info(f"Inspeção browser solicitada para: {url}")
+                result = self.inspect_with_browser(url)
+                response = f"🔍 **Inspeção com Browser em {url}:**\n\n{result}"
+            else:
+                response = "❌ Uso: /inspect <URL>"
 
         else:
             response = self.generate_response(message)
@@ -930,14 +1060,14 @@ def manage_users():
         message_lower = message.lower()
 
         if any(word in message_lower for word in ['python', 'código', 'script', 'programar']):
-            response = """🐍 **Desenvolvimento Python para Red Team:"""
+            response = """🐍 **Desenvolvimento Python para Red Team:**
 
 Posso ajudar você com:
-• Scripts de automação para testes de segurança
-• Ferramentas de OSINT personalizadas
-• Scanners de vulnerabilidade
-• Ferramentas de força bruta
-• Análise de logs e dados
+- Scripts de automação para testes de segurança
+- Ferramentas de OSINT personalizadas
+- Scanners de vulnerabilidade
+- Ferramentas de força bruta
+- Análise de logs e dados
 
 **Exemplo - Scanner de portas simples:**
 ```python
@@ -966,16 +1096,16 @@ Digite `/help` para ver comandos disponíveis!"""
             response = """🔍 **OSINT - Open Source Intelligence:**
 
 **Técnicas principais:**
-• Google Dorking para encontrar arquivos expostos
-• Análise de metadados em documentos
-• Busca em redes sociais e fóruns
-• Consultas em bases de dados públicas (Shodan, Censys)
+- Google Dorking para encontrar arquivos expostos
+- Análise de metadados em documentos
+- Busca em redes sociais e fóruns
+- Consultas em bases de dados públicas (Shodan, Censys)
 
 **Ferramentas recomendadas:**
-• theHarvester - Coleta emails e subdomínios
-• Maltego - Mapeamento de relacionamentos
-• SpiderFoot - Automação de OSINT
-• Shodan - Scanner de dispositivos IoT
+- theHarvester - Coleta emails e subdomínios
+- Maltego - Mapeamento de relacionamentos
+- SpiderFoot - Automação de OSINT
+- Shodan - Scanner de dispositivos IoT
 
 **Google Dorks úteis:**
 ```
@@ -990,16 +1120,16 @@ Use `/osint <consulta>` para buscar informações!"""
             response = """🛡️ **Segurança de Aplicações Web:**
 
 **Vulnerabilidades comuns:**
-• SQL Injection - Manipulação de consultas SQL
-• XSS (Cross-Site Scripting) - Injeção de código JavaScript
-• CSRF - Requisições maliciosas cross-site
-• Directory Traversal - Acesso a arquivos não autorizados
+- SQL Injection - Manipulação de consultas SQL
+- XSS (Cross-Site Scripting) - Injeção de código JavaScript
+- CSRF - Requisições maliciosas cross-site
+- Directory Traversal - Acesso a arquivos não autorizados
 
 **Ferramentas de teste:**
-• Burp Suite - Proxy para análise de tráfego
-• OWASP ZAP - Scanner de vulnerabilidades
-• SQLMap - Automatização de SQL Injection
-• Nikto - Scanner de vulnerabilidades web
+- Burp Suite - Proxy para análise de tráfego
+- OWASP ZAP - Scanner de vulnerabilidades
+- SQLMap - Automatização de SQL Injection
+- Nikto - Scanner de vulnerabilidades web
 
 **Headers de segurança importantes:**
 ```
@@ -1015,16 +1145,16 @@ Use `/sqltest <URL>` para testar SQL Injection!"""
             response = """🔐 **Password Cracking e Análise:**
 
 **Tipos de ataque:**
-• Força bruta - Testa todas as combinações
-• Ataque de dicionário - Usa listas de senhas comuns
-• Rainbow tables - Hashes pré-computados
-• Ataques híbridos - Combina técnicas
+- Força bruta - Testa todas as combinações
+- Ataque de dicionário - Usa listas de senhas comuns
+- Rainbow tables - Hashes pré-computados
+- Ataques híbridos - Combina técnicas
 
 **Ferramentas principais:**
-• Hashcat - GPU-accelerated password cracking
-• John the Ripper - CPU password cracker
-• Hydra - Força bruta para serviços de rede
-• Medusa - Alternative para Hydra
+- Hashcat - GPU-accelerated password cracking
+- John the Ripper - CPU password cracker
+- Hydra - Força bruta para serviços de rede
+- Medusa - Alternative para Hydra
 
 **Hashes comuns:**
 ```
@@ -1047,10 +1177,10 @@ Olá! Sou especializado em:
 🐍 **Python** - Automação e ferramentas
 
 **Como posso ajudar?**
-• Tirar dúvidas sobre técnicas de hacking ético
-• Melhorar e criar códigos Python
-• Automatizar tarefas de segurança
-• Organizar documentação técnica
+- Tirar dúvidas sobre técnicas de hacking ético
+- Melhorar e criar códigos Python
+- Automatizar tarefas de segurança
+- Organizar documentação técnica
 
 Digite `/help` para ver comandos práticos ou me faça uma pergunta específica sobre segurança cibernética!
 
@@ -1670,7 +1800,7 @@ if __name__ == "__main__":
     
     interface.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=None,  # Auto-select available port
         share=False,
         show_api=False,
         show_error=True

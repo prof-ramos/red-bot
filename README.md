@@ -91,6 +91,9 @@ O projeto utiliza o **Gradio** para a interface do chatbot e outras bibliotecas 
 * **hashlib**: Para operações de hash em password cracking
 * **itertools**: Para operações de força bruta
 * **openai**: Para integração com modelos de linguagem
+* **maigret**: Para buscas OSINT em redes sociais
+* **sublist3r**: Para descoberta de subdomínios
+* **playwright**: Para automação de navegador e inspeção avançada de páginas
 
 Todas as dependências serão instaladas automaticamente ao rodar o `setup.sh`.
 
@@ -123,8 +126,9 @@ O **RED-BOT** utiliza um **ChatBot** para auxiliar em atividades de **Red Team**
 O RED-BOT responde a diversos comandos slash especializados:
 
 ### Comandos OSINT
-* `/osint <consulta>` - Google Dorking
-* `/subdomain <dominio>` - Busca subdomínios
+* `/osint <consulta>` - Google Dorking ou busca social com Maigret
+* `/subdomain <dominio>` - Busca subdomínios com Sublist3r
+* `/inspect <url>` - Inspeção avançada de página com browser
 
 ### Comandos Web Security
 * `/sqltest <URL>` - Teste SQL Injection
@@ -150,9 +154,11 @@ O RED-BOT responde a diversos comandos slash especializados:
 **Exemplo de uso:**
 ```
  /osint site:exemplo.com filetype:pdf
+ /osint john_doe  # Busca social com Maigret
  /sqltest http://exemplo.com/login
  /hashcrack 5d41402abc4b2a76b9719d911017c592
  /subdomain exemplo.com
+ /inspect https://exemplo.com
  /xss
 ```
 

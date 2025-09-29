@@ -2,3 +2,6 @@ gradio
 requests
 beautifulsoup4
 openai
+maigret
+sublist3r
+playwright
