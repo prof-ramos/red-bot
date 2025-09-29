@@ -5,6 +5,8 @@ Desenvolvido com Gradio para interface web interativa
 """
 
 import gradio as gr
+import aiohttp
+import asyncio
 import requests
 from bs4 import BeautifulSoup
 import hashlib
@@ -15,8 +17,9 @@ import os
 import logging
 import json
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import openai
+from cachetools import TTLCache
 
 class RedBot:
     def __init__(self):
@@ -28,8 +31,14 @@ class RedBot:
         self.last_message = ""
         self.last_response = ""
         self.ensure_logs_directory()
+
+        # Performance optimizations
+        self.http_session = None
+        self.osint_cache = TTLCache(maxsize=100, ttl=3600)  # 1 hour cache
+        self.hash_cache = TTLCache(maxsize=50, ttl=7200)   # 2 hour cache for hash results
+        self.init_http_session()
         
-    def load_system_prompt(self) -> str:
+    def load_system_prompt(self) -> Optional[str]:
         """Carrega o prompt do sistema do arquivo prompt.md"""
         try:
             with open('prompt.md', 'r', encoding='utf-8') as f:
@@ -131,9 +140,67 @@ class RedBot:
     def ensure_logs_directory(self):
         """Garante que o diretório de logs existe"""
         os.makedirs('logs', exist_ok=True)
+
+    def init_http_session(self):
+        """Inicializa sessão HTTP otimizada com connection pooling"""
+        import aiohttp
+        self.http_session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(
+                limit=10,  # Connection pool limit
+                limit_per_host=5,  # Per host limit
+                ttl_dns_cache=300,  # DNS cache TTL
+                use_dns_cache=True
+            ),
+            timeout=aiohttp.ClientTimeout(
+                total=30,    # Total timeout
+                connect=10,  # Connection timeout
+                sock_read=10 # Socket read timeout
+            )
+        )
     
-    def osint_google_dorking(self, query: str) -> List[str]:
-        """Realiza Google Dorking para OSINT"""
+    async def osint_google_dorking_async(self, query: str) -> List[str]:
+        """Realiza Google Dorking para OSINT de forma assíncrona com cache"""
+        # Check cache first
+        cache_key = f"osint_{hash(query)}"
+        if cache_key in self.osint_cache:
+            self.logger.info(f"OSINT cache hit for query: {query[:50]}...")
+            return self.osint_cache[cache_key]
+
+        # Fallback to synchronous requests if async session not available
+        if self.http_session is None:
+            return self._osint_google_dorking_sync(query)
+
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            }
+            url = f"https://www.google.com/search?q={query}"
+
+            async with self.http_session.get(url, headers=headers) as response:
+                response.raise_for_status()
+                html = await response.text()
+                soup = BeautifulSoup(html, 'html.parser')
+
+                results = []
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    if 'url?q=' in href and 'google.com' not in href:
+                        clean_url = href.split('url?q=')[1].split('&')[0]
+                        results.append(clean_url)
+
+                results = results[:10]
+                # Cache the results
+                self.osint_cache[cache_key] = results
+                self.logger.info(f"OSINT query cached: {query[:50]}... ({len(results)} results)")
+                return results
+
+        except Exception as e:
+            error_msg = f"Erro na busca: {str(e)}"
+            self.osint_cache[cache_key] = [error_msg]  # Cache error to avoid repeated failures
+            return [error_msg]
+
+    def _osint_google_dorking_sync(self, query: str) -> List[str]:
+        """Fallback synchronous OSINT search"""
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -141,15 +208,27 @@ class RedBot:
             url = f"https://www.google.com/search?q={query}"
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
-            
+
             results = []
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 if 'url?q=' in href and 'google.com' not in href:
                     clean_url = href.split('url?q=')[1].split('&')[0]
                     results.append(clean_url)
-            
+
             return results[:10]
+        except Exception as e:
+            return [f"Erro na busca: {str(e)}"]
+
+    def osint_google_dorking(self, query: str) -> List[str]:
+        """Realiza Google Dorking para OSINT (wrapper síncrono)"""
+        # Run async function in event loop
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.osint_google_dorking_async(query))
+            loop.close()
+            return result
         except Exception as e:
             return [f"Erro na busca: {str(e)}"]
     
@@ -183,7 +262,7 @@ class RedBot:
         except Exception as e:
             return {'error': str(e)}
     
-    def brute_force_hash(self, target_hash: str, charset: str = None, max_length: int = 6) -> str:
+    def brute_force_hash(self, target_hash: str, charset: Optional[str] = None, max_length: int = 6) -> str:
         """Quebra hash MD5 usando força bruta"""
         if charset is None:
             charset = string.ascii_lowercase + string.digits
@@ -200,7 +279,7 @@ class RedBot:
         
         return ""
     
-    def find_subdomains(self, domain: str, wordlist: List[str] = None) -> List[str]:
+    def find_subdomains(self, domain: str, wordlist: Optional[List[str]] = None) -> List[str]:
         """Encontra subdomínios usando lista de palavras"""
         if wordlist is None:
             wordlist = ['www', 'mail', 'ftp', 'admin', 'api', 'dev', 'test', 'staging']
@@ -908,13 +987,14 @@ def manage_users():
                 response = self.openrouter_client.chat.completions.create(
                     model="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
                     messages=[
-                        {"role": "system", "content": self.system_prompt},
+                        {"role": "system", "content": self.system_prompt or "You are a helpful assistant."},
                         {"role": "user", "content": message}
                     ],
                     max_tokens=1000,
                     temperature=0.7
                 )
-                ai_response = response.choices[0].message.content.strip()
+                ai_response = response.choices[0].message.content or ""
+                ai_response = ai_response.strip()
 
                 # Adiciona aviso legal se não estiver presente
                 if "⚠️" not in ai_response and "sempre" in ai_response.lower():
@@ -930,7 +1010,7 @@ def manage_users():
         message_lower = message.lower()
 
         if any(word in message_lower for word in ['python', 'código', 'script', 'programar']):
-            response = """🐍 **Desenvolvimento Python para Red Team:"""
+            response = """🐍 **Desenvolvimento Python para Red Team:**
 
 Posso ajudar você com:
 • Scripts de automação para testes de segurança
@@ -940,7 +1020,7 @@ Posso ajudar você com:
 • Análise de logs e dados
 
 **Exemplo - Scanner de portas simples:**
-```python
+```
 import socket
 from concurrent.futures import ThreadPoolExecutor
 
@@ -977,11 +1057,51 @@ Digite `/help` para ver comandos disponíveis!"""
 • SpiderFoot - Automação de OSINT
 • Shodan - Scanner de dispositivos IoT
 
-**Google Dorks úteis:**
+**Google Dorks Cheatsheet:**
+
+### **Search Filters**
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `allintext` | Searches for occurrences of all the keywords given | `allintext:"keyword"` |
+| `intext` | Searches for the occurrences of keywords all at once or one at a time | `intext:"keyword"` |
+| `inurl` | Searches for a URL matching one of the keywords | `inurl:"keyword"` |
+| `allinurl` | Searches for a URL matching all the keywords in the query | `allinurl:"keyword"` |
+| `intitle` | Searches for occurrences of keywords in title all or one | `intitle:"keyword"` |
+| `allintitle` | Searches for occurrences of keywords all at a time | `allintitle:"keyword"` |
+| `site` | Specifically searches that particular site and lists all the results for that site | `site:"www.google.com"` |
+| `filetype` | Searches for a particular filetype mentioned in the query | `filetype:"pdf"` |
+| `link` | Searches for external links to pages | `link:"keyword"` |
+| `numrange` | Used to locate specific numbers in your searches | `numrange:321-325` |
+| `before/after` | Used to search within a particular date range | `filetype:pdf & (before:2000-01-01 after:2001-01-01)` |
+| `allinanchor` | Shows sites which have the keyterms in links pointing to them | `inanchor:rat` |
+| `related` | List web pages that are "similar" to a specified web page | `related:www.google.com` |
+| `cache` | Shows the version of the web page that Google has in its cache | `cache:www.google.com` |
+
+### **Operators**
+- **Search Term**: `"Tinned Sandwiches"` - Exact phrase search
+- **OR**: `site:facebook.com | site:twitter.com` - Search for either term
+- **AND**: `site:facebook.com & site:twitter.com` - Both terms required
+- **Include results**: `-site:facebook.com +site:facebook.*` - Include specific results
+- **Exclude results**: `site:facebook.* -site:facebook.com` - Exclude specific results
+- **Synonyms**: `~set` - Include synonyms of the word
+- **Glob pattern**: `site:*.com` - Wildcard matching
+
+### **Powerful Examples**
 ```
-site:exemplo.com filetype:pdf
-intitle:"index of" site:exemplo.com
-"senha" OR "password" site:exemplo.com
+# Arquivos expostos
+intext:"index of /"
+Nina Simone intitle:"index.of" "parent directory" "size" "last modified" "description" I Put A Spell On You (mp4|mp3|avi|flac|aac|ape|ogg) -inurl:(jsp|php|html|aspx|htm|cf|shtml|lyrics-realm|mp3-collection) -site:.info
+
+# Documentos confidenciais
+ext:(doc | pdf | xls | txt | ps | rtf | odt | sxw | psw | ppt | pps | xml) (intext:confidential salary | intext:"budget approved") inurl:confidential
+
+# Configurações expostas
+filetype:config inurl:web.config inurl:ftp
+"Windows XP Professional" 94FBR
+
+# Diretórios abertos
+parent directory DVDRip -xxx -html -htm -php -shtml -opendivx -md5 -md5sums
+parent directory MP3 -xxx -html -htm -php -shtml -opendivx -md5 -md5sums
 ```
 
 Use `/osint <consulta>` para buscar informações!"""
@@ -1064,11 +1184,11 @@ def create_interface():
     bot = RedBot()
     
     css = """
-    /* Enhanced Dark Gray Theme with Sophisticated Gradients */
+    /* Enhanced Bordeaux & Wine Theme with Matte Finishes */
     .gradio-container {
-        background: linear-gradient(135deg, #0A0A0A 0%, #121212 30%, #1B1B1B 100%) !important;
+        background: linear-gradient(135deg, #1a0f0f 0%, #2a1818 30%, #3a2020 100%) !important;
         font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-        color: #E0E0E0 !important;
+        color: #E8D5D5 !important;
         padding: 20px !important;
     }
 
@@ -1076,18 +1196,18 @@ def create_interface():
     .contain {
         max-width: 1200px !important;
         margin: 0 auto !important;
-        background: rgba(10, 10, 10, 0.4) !important;
+        background: rgba(42, 24, 24, 0.6) !important;
         border-radius: 12px !important;
-        border: 1px solid #252525 !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+        border: 1px solid #5a2a2a !important;
+        box-shadow: 0 8px 32px rgba(114, 47, 55, 0.2) !important;
         backdrop-filter: blur(10px) !important;
         overflow: hidden !important;
     }
 
     /* Header Styling */
     .header-section {
-        background: linear-gradient(135deg, #121212 0%, #191919 100%) !important;
-        border-bottom: 1px solid #2A2A2A !important;
+        background: linear-gradient(135deg, #2a1818 0%, #3a2020 100%) !important;
+        border-bottom: 1px solid #5a2a2a !important;
         padding: 20px !important;
         border-radius: 12px 12px 0 0 !important;
         margin: -20px -20px 20px -20px !important;
@@ -1101,10 +1221,10 @@ def create_interface():
     }
 
     .cyber-button {
-        background: linear-gradient(135deg, #212427 0%, #1D1F21 100%) !important;
-        color: #E0E0E0 !important;
-        border: 1px solid #404040 !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important;
+        background: linear-gradient(135deg, #4a2525 0%, #3a1a1a 100%) !important;
+        color: #E8D5D5 !important;
+        border: 1px solid #722f37 !important;
+        box-shadow: 0 4px 6px rgba(114, 47, 55, 0.3) !important;
         transition: all 0.3s ease !important;
         border-radius: 8px !important;
         font-weight: 500 !important;
@@ -1113,10 +1233,10 @@ def create_interface():
     }
 
     .cyber-button:hover {
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3), 0 0 20px rgba(160, 160, 160, 0.2) !important;
-        background: linear-gradient(135deg, #2A2A2A 0%, #212427 100%) !important;
+        box-shadow: 0 6px 12px rgba(114, 47, 55, 0.4), 0 0 20px rgba(138, 43, 226, 0.3) !important;
+        background: linear-gradient(135deg, #5a2a2a 0%, #4a2525 100%) !important;
         transform: translateY(-2px) !important;
-        border-color: #606060 !important;
+        border-color: #8b2635 !important;
     }
 
     .cyber-button:active {
@@ -1126,24 +1246,24 @@ def create_interface():
 
     /* Chat Messages */
     .chat-message {
-        background: linear-gradient(135deg, #191919 0%, #252525 100%) !important;
-        border-left: 3px solid #404040 !important;
+        background: linear-gradient(135deg, #2a1818 0%, #3a2020 100%) !important;
+        border-left: 3px solid #722f37 !important;
         border-radius: 8px !important;
         margin: 12px 0 !important;
         padding: 16px !important;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+        box-shadow: 0 4px 8px rgba(114, 47, 55, 0.2) !important;
         backdrop-filter: blur(5px) !important;
         animation: fadeIn 0.3s ease-out !important;
     }
 
     .chat-message.user {
-        background: linear-gradient(135deg, #212427 0%, #222428 100%) !important;
-        border-left-color: #6A6A6A !important;
+        background: linear-gradient(135deg, #3a2020 0%, #4a2525 100%) !important;
+        border-left-color: #8b2635 !important;
     }
 
     .chat-message.bot {
-        background: linear-gradient(135deg, #191919 0%, #1B1B1B 100%) !important;
-        border-left-color: #5A5A5A !important;
+        background: linear-gradient(135deg, #2a1818 0%, #2d1a1a 100%) !important;
+        border-left-color: #722f37 !important;
     }
 
     /* Typography */
@@ -1439,13 +1559,7 @@ def create_interface():
     
     with gr.Blocks(
         css=css,
-        title="RED-BOT - Red Team Assistant",
-        theme=gr.themes.Default(
-            primary_hue="gray",
-            secondary_hue="gray",
-            neutral_hue="gray",
-            font=["monospace", "ui-monospace", "SFMono-Regular"],
-        )
+        title="RED-BOT - Red Team Assistant"
     ) as interface:
         
         gr.HTML("""

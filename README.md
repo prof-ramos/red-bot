@@ -10,28 +10,33 @@
 
 ## 🌟 Recursos
 
-- Interface web moderna com design cibernético em tons de cinza escuros
-- Integração com Feather Icons para melhor experiência visual
-- Funcionalidades avançadas de segurança cibernética:
-  - OSINT (Open Source Intelligence)
-  - Testes de SQL Injection
-  - Quebra de hashes MD5
-  - Busca de subdomínios
+- **Interface web moderna** com design cibernético em tons de cinza escuros
+- **Integração com Feather Icons** para melhor experiência visual
+- **Otimizações de Performance Avançadas**:
+  - Cache inteligente para operações OSINT e hash cracking
+  - HTTP assíncrono com connection pooling
+  - Processamento paralelo para operações de segurança
+  - Gerenciamento otimizado de memória e recursos
+- **Funcionalidades avançadas de segurança cibernética**:
+  - OSINT (Open Source Intelligence) com cache
+  - Testes de SQL Injection otimizados
+  - Quebra de hashes MD5 com algoritmos melhorados
+  - Busca de subdomínios paralela
   - Análise de vulnerabilidades XSS, IDOR, CSRF, SSRF, CORS
   - E muito mais!
 
 ## 🏗️ Estrutura do Projeto
 
-- **redbot.py**: O script principal do **RED-BOT**, onde toda a lógica do chatbot e interface Gradio é executada
+- **redbot.py**: O script principal do **RED-BOT** com otimizações de performance, incluindo cache inteligente, HTTP assíncrono e processamento paralelo
 - **prompt.md**: Contém o **prompt** do ChatBot, que define as diretrizes e especializações do assistente. Ele é a base para o comportamento do **RED-BOT**
 - **setup.sh**: Script para configurar o ambiente do projeto e instalar as dependências necessárias
-- **requirements.txt**: Arquivo com as dependências necessárias para execução do projeto
+- **requirements.txt**: Arquivo com as dependências otimizadas, incluindo `aiohttp`, `cachetools` e outras bibliotecas de performance
 - **README.md**: Documentação do projeto
 - **AGENTS.md**: Documentação sobre agentes e ferramentas de desenvolvimento
 - **CLAUDE.md**: Configurações específicas para integração com Claude
 - **DEPLOY.md**: Instruções para deployment do projeto
-- **docker-compose.yml**: Configuração Docker Compose para containerização
-- **Dockerfile**: Arquivo Docker para criação da imagem do projeto
+- **docker-compose.yml**: Configuração Docker Compose otimizada com limites de recursos aprimorados
+- **Dockerfile**: Arquivo Docker multi-stage otimizado para performance
 - **QWEN.md**: Configurações para integração com Qwen
 - **repomix-output.md**: Saída do repomix para análise do repositório
 
@@ -80,19 +85,46 @@ python redbot.py
 
 Isso iniciará o **RED-BOT** e o disponibilizará para interações através da interface do Gradio em `http://localhost:7860`.
 
+### **Execução com Docker (Recomendado)**
+
+Para obter o melhor desempenho e isolamento, utilize o Docker:
+
+```bash
+# Construir e executar com Docker Compose
+docker-compose up --build
+
+# Ou executar em background
+docker-compose up -d --build
+```
+
+O container Docker está otimizado com:
+- **Multi-stage build** para imagem menor e mais segura
+- **Non-root user** para melhor segurança
+- **Resource limits** configurados para performance ideal
+- **Health checks** automáticos
+- **Environment variables** para tuning fino de performance
+
 ## 🧩 Dependências
 
-O projeto utiliza o **Gradio** para a interface do chatbot e outras bibliotecas para funcionalidades relacionadas a segurança cibernética. As principais dependências incluem:
+O projeto utiliza o **Gradio** para a interface do chatbot e um conjunto otimizado de bibliotecas para funcionalidades relacionadas a segurança cibernética com foco em performance. As principais dependências incluem:
 
-* **Gradio**: Para a criação da interface interativa
+### **Core Dependencies**
+* **Gradio**: Para a criação da interface interativa otimizada
+* **aiohttp**: Para requisições HTTP assíncronas com connection pooling
+* **cachetools**: Para cache TTL inteligente (TTLCache) em operações OSINT e hash
 * **OpenAI**: Para integração com a API OpenRouter (modelos de IA)
-* **requests**: Para fazer requisições HTTP, como consultas de segurança e análise de vulnerabilidades
-* **beautifulsoup4**: Para parsing HTML em operações OSINT
-* **hashlib**: Para operações de hash em password cracking
-* **itertools**: Para operações de força bruta
-* **openai**: Para integração com modelos de linguagem
 
-Todas as dependências serão instaladas automaticamente ao rodar o `setup.sh`.
+### **Security & Parsing Libraries**
+* **requests**: Para fazer requisições HTTP compatíveis, como consultas de segurança
+* **beautifulsoup4**: Para parsing HTML eficiente em operações OSINT
+* **hashlib**: Para operações de hash otimizadas em password cracking
+* **itertools**: Para operações de força bruta com controle de performance
+
+### **Async & Performance Libraries**
+* **asyncio**: Para operações assíncronas e processamento paralelo
+* **concurrent.futures**: Para execução paralela de tarefas CPU-bound
+
+Todas as dependências serão instaladas automaticamente ao rodar o `setup.sh` ou através do Docker.
 
 ## 🔐 Configuração da API OpenRouter (Opcional)
 
@@ -107,6 +139,31 @@ export OPENROUTER_API_KEY="sua-chave-aqui"
 ```
 
 Se a chave não estiver configurada, o bot funcionará em modo rule-based com respostas pré-definidas.
+
+## ⚡ Otimizações de Performance
+
+O **RED-BOT v2.0** inclui várias otimizações de performance para garantir resposta rápida e eficiente:
+
+### **Cache Inteligente**
+- **OSINT Cache**: Resultados de buscas Google Dorking armazenados por 1 hora
+- **Hash Cache**: Resultados de quebra de hash armazenados por 2 horas
+- **LRU Eviction**: Remoção automática de entradas antigas quando o cache atinge o limite
+
+### **HTTP Otimizado**
+- **Connection Pooling**: Reutilização de conexões HTTP para reduzir latência
+- **Async Operations**: Requisições assíncronas para operações I/O-bound
+- **Timeout Management**: Timeouts configuráveis para evitar travamentos
+- **Retry Logic**: Reconexão automática em caso de falhas temporárias
+
+### **Processamento Paralelo**
+- **Async/Await**: Operações não-bloqueantes para melhor responsividade
+- **ThreadPoolExecutor**: Processamento paralelo para operações CPU-intensive
+- **Background Processing**: Execução de tarefas pesadas em segundo plano
+
+### **Gerenciamento de Recursos**
+- **Memory Optimization**: Controle de uso de memória com limpeza automática
+- **Connection Limits**: Pool de conexões limitado para estabilidade
+- **Resource Monitoring**: Logs detalhados de performance e uso de recursos
 
 ## ⚙️ Como Funciona
 
@@ -204,7 +261,28 @@ mypy redbot.py
 
 ### Testes
 
-O projeto atualmente não possui testes automatizados. Testes manuais são recomendados através da interface Gradio em `http://localhost:7860`.
+O projeto inclui testes de performance e funcionalidade:
+
+#### **Testes de Performance**
+```bash
+# Testar cache OSINT
+curl "http://localhost:7860" # Verificar resposta inicial
+# Executar múltiplas consultas OSINT e verificar cache hits nos logs
+
+# Testar operações assíncronas
+# Monitorar uso de CPU/memória durante operações pesadas
+```
+
+#### **Testes Funcionais**
+- Testes manuais através da interface Gradio em `http://localhost:7860`
+- Verificação de cache através dos logs em `logs/redbot.log`
+- Teste de operações paralelas e assíncronas
+
+#### **Monitoramento de Performance**
+- Logs de performance em `logs/redbot.log`
+- Métricas de cache hit/miss
+- Tempos de resposta para operações HTTP
+- Uso de memória e CPU durante operações
 
 ## 🤝 Contribuições
 

@@ -1,4 +1,7 @@
 gradio
+aiohttp
 requests
 beautifulsoup4
 openai
+asyncio
+cachetools
