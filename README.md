@@ -94,6 +94,7 @@ O projeto utiliza o **Gradio** para a interface do chatbot e outras bibliotecas 
 * **maigret**: Para buscas OSINT em redes sociais
 * **sublist3r**: Para descoberta de subdomínios
 * **playwright**: Para automação de navegador e inspeção avançada de páginas
+* **MCP Chrome DevTools**: Integração planejada com Chrome DevTools via Model Context Protocol para inspeção avançada de navegador
 
 Todas as dependências serão instaladas automaticamente ao rodar o `setup.sh`.
 
@@ -173,6 +174,30 @@ A interface do RED-BOT foi aprimorada com os seguintes recursos de UI/UX:
 * **Animações sutis** - Efeitos de transição e glow para melhor experiência do usuário
 * **Acessibilidade** - Contraste adequado e elementos com tamanhos apropriados para toque
 * **Layout intuitivo** - Organização clara dos elementos com barra lateral de comandos
+* **Sistema de Feedback** - Botões de curtida/não curtida para avaliar respostas
+
+## 🔧 Integração MCP (Model Context Protocol)
+
+O RED-BOT inclui preparação para integração com o Model Context Protocol para capacidades avançadas:
+
+### Chrome DevTools MCP
+- **Status**: Placeholder implementado
+- **Configuração**:
+  ```json
+  {
+    "mcpServers": {
+      "chrome-devtools": {
+        "command": "npx",
+        "args": ["chrome-devtools-mcp@latest"]
+      }
+    }
+  }
+  ```
+- **Uso**: Atualmente usa Playwright como fallback para inspeção de navegador
+- **Benefícios Futuros**: Controle direto do Chrome DevTools via IA para análise avançada de páginas web
+
+### Implementação Atual
+O comando `/inspect <url>` utiliza Playwright para inspeção de páginas, com estrutura preparada para migração para MCP quando o SDK Python estiver disponível.
 
 ## 🔧 Como Personalizar
 
