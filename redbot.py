@@ -266,7 +266,10 @@ class RedBot:
         return subdomains
 
     def inspect_with_browser(self, url: str) -> str:
-        """Inspeciona URL usando Playwright para análise avançada"""
+        """Inspeciona URL usando Playwright para análise avançada
+        TODO: Integrate MCP Chrome DevTools for enhanced browser inspection
+        Config: {"mcpServers": {"chrome-devtools": {"command": "npx", "args": ["chrome-devtools-mcp@latest"]}}}
+        """
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
