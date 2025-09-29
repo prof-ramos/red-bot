@@ -36,7 +36,6 @@ class RedBot:
         self.http_session = None
         self.osint_cache = TTLCache(maxsize=100, ttl=3600)  # 1 hour cache
         self.hash_cache = TTLCache(maxsize=50, ttl=7200)   # 2 hour cache for hash results
-        self.init_http_session()
         
     def load_system_prompt(self) -> Optional[str]:
         """Carrega o prompt do sistema do arquivo prompt.md"""
@@ -144,7 +143,29 @@ class RedBot:
     def init_http_session(self):
         """Inicializa sessão HTTP otimizada com connection pooling"""
         import aiohttp
-        self.http_session = aiohttp.ClientSession(
+        try:
+            # Try to get existing loop, create new one if needed
+            try:
+                loop = asyncio.get_running_loop()
+                # If there's a running loop, create session in a thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(self._create_http_session)
+                    self.http_session = future.result()
+            except RuntimeError:
+                # No running loop, create new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self.http_session = loop.run_until_complete(self._create_http_session_async())
+                loop.close()
+        except Exception as e:
+            self.error_logger.error(f"Erro ao inicializar sessão HTTP: {e}")
+            self.http_session = None
+
+    async def _create_http_session_async(self):
+        """Cria sessão HTTP de forma assíncrona"""
+        import aiohttp
+        return aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(
                 limit=10,  # Connection pool limit
                 limit_per_host=5,  # Per host limit
@@ -157,6 +178,17 @@ class RedBot:
                 sock_read=10 # Socket read timeout
             )
         )
+
+    def _create_http_session(self):
+        """Cria sessão HTTP de forma síncrona"""
+        import aiohttp
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            session = loop.run_until_complete(self._create_http_session_async())
+            return session
+        finally:
+            loop.close()
     
     async def osint_google_dorking_async(self, query: str) -> List[str]:
         """Realiza Google Dorking para OSINT de forma assíncrona com cache"""
@@ -166,38 +198,8 @@ class RedBot:
             self.logger.info(f"OSINT cache hit for query: {query[:50]}...")
             return self.osint_cache[cache_key]
 
-        # Fallback to synchronous requests if async session not available
-        if self.http_session is None:
-            return self._osint_google_dorking_sync(query)
-
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            }
-            url = f"https://www.google.com/search?q={query}"
-
-            async with self.http_session.get(url, headers=headers) as response:
-                response.raise_for_status()
-                html = await response.text()
-                soup = BeautifulSoup(html, 'html.parser')
-
-                results = []
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    if 'url?q=' in href and 'google.com' not in href:
-                        clean_url = href.split('url?q=')[1].split('&')[0]
-                        results.append(clean_url)
-
-                results = results[:10]
-                # Cache the results
-                self.osint_cache[cache_key] = results
-                self.logger.info(f"OSINT query cached: {query[:50]}... ({len(results)} results)")
-                return results
-
-        except Exception as e:
-            error_msg = f"Erro na busca: {str(e)}"
-            self.osint_cache[cache_key] = [error_msg]  # Cache error to avoid repeated failures
-            return [error_msg]
+        # For now, use synchronous method to avoid event loop issues
+        return self._osint_google_dorking_sync(query)
 
     def _osint_google_dorking_sync(self, query: str) -> List[str]:
         """Fallback synchronous OSINT search"""
@@ -1941,7 +1943,7 @@ if __name__ == "__main__":
     
     interface.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=7862,
         share=False,
         show_api=False,
         show_error=True
