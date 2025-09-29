@@ -24,8 +24,6 @@
 
 ## 🌟 Recursos
 
-- **Interface web moderna** com design cibernético em tons de cinza escuros
-- **Integração com Feather Icons** para melhor experiência visual
 - **Otimizações de Performance Avançadas**:
   - Cache inteligente para operações OSINT e hash cracking
   - HTTP assíncrono com connection pooling
@@ -227,26 +225,15 @@ O RED-BOT responde a diversos comandos slash especializados:
  /xss
 ```
 
-## 🎨 Design da Interface
 
-A interface do RED-BOT foi aprimorada com os seguintes recursos de UI/UX:
-
-* **Design cibernético em tons de cinza escuros** - Usando uma paleta de cores sofisticada com gradientes em tons de preto e cinza
-* **Ícones Feather** - Integração dos Feather Icons para uma experiência visual mais rica
-* **Responsividade** - Design adaptável para diferentes tamanhos de tela
-* **Tipografia monoespaçada** - Usando JetBrains Mono para um visual mais técnico
-* **Animações sutis** - Efeitos de transição e glow para melhor experiência do usuário
-* **Acessibilidade** - Contraste adequado e elementos com tamanhos apropriados para toque
-* **Layout intuitivo** - Organização clara dos elementos com barra lateral de comandos
 
 ## 🔧 Como Personalizar
 
 Caso você queira personalizar o **RED-BOT** ou adaptá-lo a novas necessidades, você pode:
 
 1. Editar o arquivo **prompt.md** para ajustar os comportamentos do assistente e suas respostas
-2. Modificar o CSS na função `create_interface()` em `redbot.py` para alterar o design
-3. Adicionar novos comandos editando o método `process_message()` em `RedBot`
-4. Estender as funcionalidades criando novos métodos na classe `RedBot`
+2. Adicionar novos comandos editando o método `process_message()` em `RedBot`
+3. Estender as funcionalidades criando novos métodos na classe `RedBot`
 
 Esse arquivo é onde você pode definir as diretrizes e comandos que o bot deve seguir.
 
